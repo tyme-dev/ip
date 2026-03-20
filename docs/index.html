@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>IP Subnet Availability Checker</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container" role="main">
+    <header class="header">
+      <h1>IP Subnet Availability Checker</h1>
+      <p class="lead">Client-side tool to list available non-conflicting subnets inside an overall IPv4 CIDR.</p>
+    </header>
+
+    <section class="grid">
+      <form id="check-form" class="card form-card" novalidate>
+        <fieldset>
+          <legend>Input</legend>
+
+          <label for="overall">Overall CIDR</label>
+          <input id="overall" name="overall" type="text" inputmode="text" required
+                 placeholder="10.0.0.0/24"
+                 value="10.0.0.0/24"
+                 aria-describedby="overall-help" />
+
+          <div id="overall-help" class="muted">IPv4 CIDR, e.g. <code>10.0.0.0/24</code></div>
+
+          <label for="existing">Existing subnets (one per line)</label>
+          <textarea id="existing" name="existing" rows="5" placeholder="10.0.0.0/26\n10.0.0.128/26">10.0.0.0/26
+10.0.0.128/26</textarea>
+
+          <div class="row">
+            <div style="flex:1">
+              <label for="prefix">Requested prefix</label>
+              <input id="prefix" name="prefix" type="number" min="0" max="32" required placeholder="26" value="27" />
+            </div>
+
+            <div class="actions-inline">
+              <button id="ajax-check" type="button" class="btn primary">Check</button>
+              <button id="download-json" type="button" class="btn">Download JSON</button>
+            </div>
+          </div>
+
+          <div id="form-error" class="error" role="alert" aria-live="polite" style="display:none;"></div>
+        </fieldset>
+      </form>
+
+      <aside id="results-card" class="card results-card" aria-live="polite">
+        <div class="results-header">
+          <h2>Available (non-conflicting) subnets</h2>
+          <div id="summary" class="muted">No results yet</div>
+        </div>
+
+        <div id="spinner" class="spinner" aria-hidden="true" title="Loading" style="display:none;"></div>
+
+        <div id="results-content" style="display:none;">
+          <div class="result-actions">
+            <button id="copy-all" class="btn small">Copy all</button>
+            <button id="filter-toggle" class="btn small">Show conflicts (debug)</button>
+          </div>
+
+          <div id="available-section" class="available-section">
+            <h3>Subnets (<span id="available-count">0</span>)</h3>
+            <ul id="available-list" class="available-list" aria-live="polite"></ul>
+          </div>
+
+          <div id="debug-section" class="available-section" style="display:none;">
+            <h3>All candidates with collisions (debug)</h3>
+            <ul id="debug-list" class="available-list" aria-live="polite"></ul>
+          </div>
+
+          <div id="json-section" class="json-section" style="display:none;">
+            <pre id="json-pre" class="json-pre"></pre>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <footer class="footer muted">
+      <small>Client-only site — runs entirely in your browser.</small>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
