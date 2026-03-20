@@ -1,0 +1,3 @@
+ipaddress; python_version < "3.8"
+pytest
+# ipaddress is part of stdlib on Python >= 3.3, so requirement only for older Pythons.
