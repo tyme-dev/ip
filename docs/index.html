@@ -1,87 +1,718 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>IP Subnet Availability Checker</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subnet Collision Checker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3352;
+      --accent: #4f8ef7;
+      --accent-dim: #2d5099;
+      --green: #3dd68c;
+      --green-dim: #1a5c3d;
+      --red: #f75f5f;
+      --red-dim: #5c1a1a;
+      --yellow: #f7c948;
+      --yellow-dim: #5c4a1a;
+      --text: #e8eaf0;
+      --text-dim: #8892b0;
+      --font: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      color: var(--text-dim);
+      font-size: 0.875rem;
+      margin-bottom: 28px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"].error { border-color: var(--red); }
+    input[type="text"].valid { border-color: var(--green); }
+
+    .input-error {
+      font-size: 0.75rem;
+      color: var(--red);
+      margin-top: 4px;
+      min-height: 16px;
+    }
+
+    .subnet-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .subnet-row input { flex: 1; }
+
+    .btn-icon {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 32px;
+      height: 32px;
+      cursor: pointer;
+      color: var(--text-dim);
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+
+    .btn-icon:hover { border-color: var(--red); color: var(--red); }
+    .btn-icon.add:hover { border-color: var(--green); color: var(--green); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .btn:hover { opacity: 0.85; }
+    .btn.secondary { background: var(--surface2); color: var(--text-dim); }
+    .btn.secondary:hover { color: var(--text); opacity: 1; }
+
+    .btn-row { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+    /* Result panel */
+    .result-card {
+      grid-column: 1 / -1;
+    }
+
+    .result-hidden { display: none; }
+
+    .result-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    .result-banner.ok   { background: var(--green-dim);  color: var(--green); border: 1px solid #2a7a50; }
+    .result-banner.fail { background: var(--red-dim);    color: var(--red);   border: 1px solid #7a2a2a; }
+    .result-banner.warn { background: var(--yellow-dim); color: var(--yellow);border: 1px solid #7a6020; }
+
+    .result-banner .icon { font-size: 1.3rem; }
+
+    .checks { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.875rem;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: var(--surface2);
+    }
+
+    .check-item .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+
+    .check-item.pass .dot { background: var(--green); }
+    .check-item.fail .dot { background: var(--red); }
+    .check-item.info .dot { background: var(--accent); }
+
+    .check-item .label { flex: 1; }
+    .check-item .mono  { font-family: var(--font); color: var(--text-dim); font-size: 0.8rem; }
+
+    /* Visual map */
+    .map-title { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 8px; }
+
+    .map-container {
+      position: relative;
+      height: 48px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .map-bar {
+      position: absolute;
+      top: 6px; bottom: 6px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-family: var(--font);
+      white-space: nowrap;
+      overflow: hidden;
+      transition: opacity 0.2s;
+    }
+
+    .map-bar.existing  { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); }
+    .map-bar.proposed.ok   { background: var(--green-dim);  color: var(--green); border: 1px solid var(--green); }
+    .map-bar.proposed.fail { background: var(--red-dim);    color: var(--red);   border: 1px solid var(--red); }
+
+    .map-legend { display: flex; gap: 16px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-dim); }
+    .legend-dot  { width: 10px; height: 10px; border-radius: 3px; }
+
+    /* Available subnets */
+    .avail-section { margin-top: 16px; }
+    .avail-title { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 8px; }
+    .avail-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .avail-chip {
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid #2a7a50;
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-family: var(--font);
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .avail-chip:hover { opacity: 0.7; }
+    .avail-more { color: var(--text-dim); font-size: 0.78rem; align-self: center; }
+
+    .section-sep { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+    /* Info tooltip */
+    .info { font-size: 0.78rem; color: var(--text-dim); margin-top: 8px; }
+    .tag  { display: inline-block; background: var(--surface2); border-radius: 4px; padding: 1px 6px; font-family: var(--font); }
+  </style>
 </head>
 <body>
-  <main class="container" role="main">
-    <header class="header">
-      <h1>IP Subnet Availability Checker</h1>
-      <p class="lead">Client-side tool to list available non-conflicting subnets inside an overall IPv4 CIDR.</p>
-    </header>
 
-    <section class="grid">
-      <form id="check-form" class="card form-card" novalidate>
-        <fieldset>
-          <legend>Input</legend>
+<div style="max-width:1100px;margin:0 auto">
+  <h1>Subnet Collision Checker</h1>
+  <p class="subtitle">Verify whether a subnet can be allocated without overlapping existing ranges</p>
 
-          <label for="overall">Overall CIDR</label>
-          <input id="overall" name="overall" type="text" inputmode="text" required
-                 placeholder="10.0.0.0/24"
-                 value="10.0.0.0/24"
-                 aria-describedby="overall-help" />
+  <div class="grid">
 
-          <div id="overall-help" class="muted">IPv4 CIDR, e.g. <code>10.0.0.0/24</code></div>
+    <!-- Left: Parent + Existing -->
+    <div class="card">
+      <div class="card-title">Network Configuration</div>
 
-          <label for="existing">Existing subnets (one per line)</label>
-          <textarea id="existing" name="existing" rows="5" placeholder="10.0.0.0/26\n10.0.0.128/26">10.0.0.0/26
-10.0.0.128/26</textarea>
+      <label>Parent Network CIDR</label>
+      <input type="text" id="parent-cidr" placeholder="e.g. 10.0.0.0/8" autocomplete="off" spellcheck="false">
+      <div class="input-error" id="parent-err"></div>
 
-          <div class="row">
-            <div style="flex:1">
-              <label for="prefix">Requested prefix</label>
-              <input id="prefix" name="prefix" type="number" min="0" max="32" required placeholder="26" value="27" />
-            </div>
+      <hr class="section-sep">
 
-            <div class="actions-inline">
-              <button id="ajax-check" type="button" class="btn primary">Check</button>
-              <button id="download-json" type="button" class="btn">Download JSON</button>
-            </div>
-          </div>
+      <label style="margin-bottom:10px">Existing Subnets</label>
+      <div id="subnet-list"></div>
 
-          <div id="form-error" class="error" role="alert" aria-live="polite" style="display:none;"></div>
-        </fieldset>
-      </form>
+      <button class="btn-icon add" id="add-subnet-btn" title="Add subnet" style="margin-top:4px">+</button>
+      <div class="info">Click <span class="tag">+</span> to add allocated subnets. Available subnets in the result can be clicked to autofill.</div>
+    </div>
 
-      <aside id="results-card" class="card results-card" aria-live="polite">
-        <div class="results-header">
-          <h2>Available (non-conflicting) subnets</h2>
-          <div id="summary" class="muted">No results yet</div>
+    <!-- Right: Proposed -->
+    <div class="card">
+      <div class="card-title">Proposed Subnet</div>
+
+      <label>Subnet CIDR to check</label>
+      <input type="text" id="proposed-cidr" placeholder="e.g. 10.1.0.0/24" autocomplete="off" spellcheck="false">
+      <div class="input-error" id="proposed-err"></div>
+
+      <hr class="section-sep">
+
+      <label>Find available subnets for prefix length</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="find-prefix" placeholder="e.g. 24" style="width:80px" autocomplete="off">
+        <span style="color:var(--text-dim);font-size:0.85rem">→ lists open slots in the parent</span>
+      </div>
+      <div class="input-error" id="find-err"></div>
+
+      <div class="btn-row">
+        <button class="btn" id="check-btn">Check subnet</button>
+        <button class="btn secondary" id="reset-btn">Reset</button>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div class="card result-card result-hidden" id="result-card">
+      <div class="card-title">Result</div>
+
+      <div class="result-banner" id="result-banner">
+        <span class="icon" id="result-icon"></span>
+        <span id="result-msg"></span>
+      </div>
+
+      <ul class="checks" id="checks-list"></ul>
+
+      <div id="map-section" class="result-hidden">
+        <div class="map-title">Address space map (relative to parent network)</div>
+        <div class="map-container" id="map-container"></div>
+        <div class="map-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Existing subnet</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Proposed (no collision)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Proposed (collision)</div>
         </div>
+      </div>
 
-        <div id="spinner" class="spinner" aria-hidden="true" title="Loading" style="display:none;"></div>
+      <div id="avail-section" class="avail-section result-hidden">
+        <hr class="section-sep">
+        <div class="avail-title" id="avail-title">Available subnets</div>
+        <div class="avail-grid" id="avail-grid"></div>
+      </div>
+    </div>
 
-        <div id="results-content" style="display:none;">
-          <div class="result-actions">
-            <button id="copy-all" class="btn small">Copy all</button>
-            <button id="filter-toggle" class="btn small">Show conflicts (debug)</button>
-          </div>
+  </div>
+</div>
 
-          <div id="available-section" class="available-section">
-            <h3>Subnets (<span id="available-count">0</span>)</h3>
-            <ul id="available-list" class="available-list" aria-live="polite"></ul>
-          </div>
+<script>
+// ─── IP Math ──────────────────────────────────────────────────────────────────
 
-          <div id="debug-section" class="available-section" style="display:none;">
-            <h3>All candidates with collisions (debug)</h3>
-            <ul id="debug-list" class="available-list" aria-live="polite"></ul>
-          </div>
+function ipToInt(ip) {
+  const parts = ip.split('.');
+  if (parts.length !== 4) return null;
+  let v = 0;
+  for (const p of parts) {
+    const n = parseInt(p, 10);
+    if (isNaN(n) || n < 0 || n > 255) return null;
+    v = (v * 256 + n) >>> 0;
+  }
+  return v >>> 0;
+}
 
-          <div id="json-section" class="json-section" style="display:none;">
-            <pre id="json-pre" class="json-pre"></pre>
-          </div>
-        </div>
-      </aside>
-    </section>
+function intToIp(n) {
+  return [(n >>> 24) & 0xFF, (n >>> 16) & 0xFF, (n >>> 8) & 0xFF, n & 0xFF].join('.');
+}
 
-    <footer class="footer muted">
-      <small>Client-only site — runs entirely in your browser.</small>
-    </footer>
-  </main>
+function parseCIDR(cidr) {
+  cidr = cidr.trim();
+  const slash = cidr.indexOf('/');
+  if (slash === -1) return null;
+  const ip = cidr.slice(0, slash);
+  const prefix = parseInt(cidr.slice(slash + 1), 10);
+  if (isNaN(prefix) || prefix < 0 || prefix > 32) return null;
+  const addr = ipToInt(ip);
+  if (addr === null) return null;
+  const mask   = prefix === 0 ? 0 : ((~0 << (32 - prefix)) >>> 0);
+  const network = (addr & mask) >>> 0;
+  const bcast   = (network | (~mask >>> 0)) >>> 0;
+  return { cidr, ip, prefix, addr, mask, network, bcast };
+}
 
-  <script src="app.js"></script>
+function overlaps(a, b) {
+  return a.network <= b.bcast && b.network <= a.bcast;
+}
+
+function contains(parent, child) {
+  return parent.network <= child.network && child.bcast <= parent.bcast;
+}
+
+function networkCIDR(n) {
+  const c = parseCIDR(n.cidr);
+  return intToIp(c.network) + '/' + c.prefix;
+}
+
+// Find up to `limit` available subnets of prefix length `plen` within parent, avoiding `existing`
+function findAvailable(parent, existing, plen, limit = 20) {
+  if (plen < parent.prefix || plen > 32) return [];
+  const size  = plen === 32 ? 1 : (1 << (32 - plen)) >>> 0;
+  const results = [];
+  let cursor = parent.network;
+
+  while (cursor <= parent.bcast && results.length < limit) {
+    // align cursor to subnet boundary
+    const aligned = (Math.floor(cursor / size) * size) >>> 0;
+    const candidate = {
+      network: aligned,
+      bcast: (aligned + size - 1) >>> 0,
+      prefix: plen,
+      cidr: intToIp(aligned) + '/' + plen,
+    };
+
+    if (candidate.bcast > parent.bcast) break;
+
+    const collision = existing.some(e => overlaps(e, candidate));
+    if (!collision) {
+      results.push(candidate.cidr);
+      cursor = (candidate.bcast + 1) >>> 0;
+    } else {
+      // skip past the conflicting existing subnet
+      const blocker = existing.find(e => overlaps(e, candidate));
+      cursor = blocker ? (blocker.bcast + 1) >>> 0 : (candidate.bcast + 1) >>> 0;
+    }
+
+    if (cursor === 0) break; // wrapped around
+  }
+  return results;
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
+let subnetCount = 0;
+
+function addSubnetRow(value = '') {
+  const list = document.getElementById('subnet-list');
+  const id = ++subnetCount;
+  const row = document.createElement('div');
+  row.className = 'subnet-row';
+  row.dataset.id = id;
+  row.innerHTML = `
+    <input type="text" id="subnet-${id}" placeholder="e.g. 10.0.1.0/24" autocomplete="off" spellcheck="false" value="${value}">
+    <button class="btn-icon" title="Remove" onclick="removeRow(${id})">×</button>
+  `;
+  list.appendChild(row);
+  document.getElementById(`subnet-${id}`).focus();
+}
+
+function removeRow(id) {
+  const row = document.querySelector(`.subnet-row[data-id="${id}"]`);
+  if (row) row.remove();
+}
+
+function getSubnets() {
+  return [...document.querySelectorAll('#subnet-list input')].map(i => i.value.trim()).filter(Boolean);
+}
+
+// ─── Validation helpers ───────────────────────────────────────────────────────
+
+function setValid(inputId, errId, ok, msg = '') {
+  const el = document.getElementById(inputId);
+  const err = document.getElementById(errId);
+  el.classList.toggle('error', !ok && msg !== '');
+  el.classList.toggle('valid', ok);
+  err.textContent = ok ? '' : msg;
+  return ok;
+}
+
+// ─── Check ────────────────────────────────────────────────────────────────────
+
+function check() {
+  const parentRaw   = document.getElementById('parent-cidr').value.trim();
+  const proposedRaw = document.getElementById('proposed-cidr').value.trim();
+  const findPfxRaw  = document.getElementById('find-prefix').value.trim();
+
+  // --- Parse parent
+  const parent = parseCIDR(parentRaw);
+  if (!parent) {
+    setValid('parent-cidr', 'parent-err', false, 'Invalid CIDR (e.g. 10.0.0.0/8)');
+    return;
+  }
+  // Warn if address isn't canonical
+  const canonicalParent = intToIp(parent.network) + '/' + parent.prefix;
+  setValid('parent-cidr', 'parent-err', true);
+
+  // --- Parse existing subnets
+  const rawSubnets = getSubnets();
+  const existingParsed = rawSubnets.map(s => ({ raw: s, parsed: parseCIDR(s) }));
+  const badSubnet = existingParsed.find(e => !e.parsed);
+  if (badSubnet) {
+    showError(`Invalid existing subnet: "${badSubnet.raw}"`);
+    return;
+  }
+  const existing = existingParsed.map(e => e.parsed);
+
+  // --- Parse proposed
+  let proposed = null;
+  if (proposedRaw) {
+    proposed = parseCIDR(proposedRaw);
+    if (!proposed) {
+      setValid('proposed-cidr', 'proposed-err', false, 'Invalid CIDR');
+      return;
+    }
+    setValid('proposed-cidr', 'proposed-err', true);
+  }
+
+  // --- Parse find-prefix
+  let findPfx = null;
+  if (findPfxRaw) {
+    findPfx = parseInt(findPfxRaw, 10);
+    if (isNaN(findPfx) || findPfx < 0 || findPfx > 32) {
+      setValid('find-prefix', 'find-err', false, 'Must be 0–32');
+      return;
+    }
+    setValid('find-prefix', 'find-err', true);
+  }
+
+  // --- Run checks
+  const checks = [];
+  let overallOk = true;
+
+  if (proposed) {
+    // Check 1: canonical form
+    const canonicalProposed = intToIp(proposed.network) + '/' + proposed.prefix;
+    const isCanonical = canonicalProposed === proposedRaw || canonicalProposed === proposed.cidr.replace(/\s/g, '');
+    checks.push({
+      type: 'info',
+      label: 'Network address',
+      mono: canonicalProposed,
+    });
+
+    // Check 2: fits in parent
+    const fits = contains(parent, proposed);
+    if (!fits) overallOk = false;
+    checks.push({
+      type: fits ? 'pass' : 'fail',
+      label: fits
+        ? `Fits within parent network ${canonicalParent}`
+        : `Outside parent network ${canonicalParent}`,
+      mono: `${intToIp(proposed.network)} – ${intToIp(proposed.bcast)}`,
+    });
+
+    // Check 3: collision with each existing
+    const colliders = existing.filter(e => overlaps(e, proposed));
+    if (colliders.length > 0) overallOk = false;
+
+    if (colliders.length === 0) {
+      checks.push({
+        type: 'pass',
+        label: existing.length > 0
+          ? `No collision with ${existing.length} existing subnet${existing.length > 1 ? 's' : ''}`
+          : 'No existing subnets to conflict with',
+        mono: '',
+      });
+    } else {
+      for (const c of colliders) {
+        const cCanon = intToIp(c.network) + '/' + c.prefix;
+        checks.push({ type: 'fail', label: `Overlaps with ${cCanon}`, mono: `${intToIp(c.network)} – ${intToIp(c.bcast)}` });
+      }
+    }
+
+    // Check 4: prefix size
+    const hostBits = 32 - proposed.prefix;
+    const hosts = hostBits > 1 ? (Math.pow(2, hostBits) - 2) : (hostBits === 1 ? 0 : 1);
+    checks.push({ type: 'info', label: `Subnet size: /${proposed.prefix} → ${hosts.toLocaleString()} usable host${hosts !== 1 ? 's' : ''}`, mono: '' });
+
+    showResult(overallOk, checks, parent, existing, proposed, findPfx);
+  } else if (findPfx !== null) {
+    // Just find available
+    showResult(null, [], parent, existing, null, findPfx);
+  } else {
+    setValid('proposed-cidr', 'proposed-err', false, 'Enter a subnet CIDR to check, or a prefix length to find available subnets');
+  }
+}
+
+function showError(msg) {
+  const card = document.getElementById('result-card');
+  card.classList.remove('result-hidden');
+  document.getElementById('result-banner').className = 'result-banner fail';
+  document.getElementById('result-icon').textContent = '✕';
+  document.getElementById('result-msg').textContent = msg;
+  document.getElementById('checks-list').innerHTML = '';
+  document.getElementById('map-section').classList.add('result-hidden');
+  document.getElementById('avail-section').classList.add('result-hidden');
+}
+
+function showResult(ok, checks, parent, existing, proposed, findPfx) {
+  const card    = document.getElementById('result-card');
+  const banner  = document.getElementById('result-banner');
+  const icon    = document.getElementById('result-icon');
+  const msg     = document.getElementById('result-msg');
+  const list    = document.getElementById('checks-list');
+  const mapSec  = document.getElementById('map-section');
+  const mapCont = document.getElementById('map-container');
+  const availSec= document.getElementById('avail-section');
+  const availGrid= document.getElementById('avail-grid');
+  const availTitle= document.getElementById('avail-title');
+
+  card.classList.remove('result-hidden');
+
+  if (proposed !== null) {
+    banner.className = 'result-banner ' + (ok ? 'ok' : 'fail');
+    icon.textContent  = ok ? '✓' : '✕';
+    msg.textContent   = ok
+      ? 'Subnet can be created — no collisions detected.'
+      : 'Subnet cannot be created — collision or out-of-range.';
+  } else {
+    banner.className = 'result-banner warn';
+    icon.textContent = '⊙';
+    msg.textContent  = 'Showing available subnets only (no proposed CIDR entered).';
+  }
+
+  // Render checks
+  list.innerHTML = '';
+  for (const c of checks) {
+    const li = document.createElement('li');
+    li.className = 'check-item ' + c.type;
+    li.innerHTML = `<span class="dot"></span><span class="label">${c.label}</span>${c.mono ? `<span class="mono">${c.mono}</span>` : ''}`;
+    list.appendChild(li);
+  }
+
+  // Visual map
+  if (proposed) {
+    mapSec.classList.remove('result-hidden');
+    mapCont.innerHTML = '';
+    const parentSize = parent.bcast - parent.network + 1;
+
+    function toPercent(addr, width) {
+      const start = Math.max(0, ((addr - parent.network) / parentSize) * 100);
+      const end   = Math.min(100, start + (width / parentSize) * 100);
+      return { left: start.toFixed(4) + '%', width: Math.max(0.3, end - start).toFixed(4) + '%' };
+    }
+
+    for (const e of existing) {
+      const p = toPercent(e.network, e.bcast - e.network + 1);
+      const bar = document.createElement('div');
+      bar.className = 'map-bar existing';
+      bar.style.left = p.left; bar.style.width = p.width;
+      bar.title = intToIp(e.network) + '/' + e.prefix;
+      bar.textContent = parseFloat(p.width) > 4 ? ('/' + e.prefix) : '';
+      mapCont.appendChild(bar);
+    }
+
+    const pp = toPercent(proposed.network, proposed.bcast - proposed.network + 1);
+    const pBar = document.createElement('div');
+    pBar.className = 'map-bar proposed ' + (ok ? 'ok' : 'fail');
+    pBar.style.left = pp.left; pBar.style.width = pp.width;
+    pBar.title = intToIp(proposed.network) + '/' + proposed.prefix;
+    pBar.textContent = parseFloat(pp.width) > 4 ? ('/' + proposed.prefix) : '';
+    mapCont.appendChild(pBar);
+  } else {
+    mapSec.classList.add('result-hidden');
+  }
+
+  // Available subnets
+  if (findPfx !== null) {
+    availSec.classList.remove('result-hidden');
+    availGrid.innerHTML = '';
+    const available = findAvailable(parent, existing, findPfx, 30);
+    availTitle.textContent = `Available /${findPfx} subnets in ${intToIp(parent.network)}/${parent.prefix}`;
+
+    if (available.length === 0) {
+      availGrid.innerHTML = '<span style="color:var(--text-dim);font-size:0.875rem">No available subnets found.</span>';
+    } else {
+      const shown = available.slice(0, 20);
+      for (const s of shown) {
+        const chip = document.createElement('button');
+        chip.className = 'avail-chip';
+        chip.textContent = s;
+        chip.title = 'Click to use as proposed subnet';
+        chip.onclick = () => {
+          document.getElementById('proposed-cidr').value = s;
+          check();
+        };
+        availGrid.appendChild(chip);
+      }
+      if (available.length === 20) {
+        const more = document.createElement('span');
+        more.className = 'avail-more';
+        more.textContent = '+ more…';
+        availGrid.appendChild(more);
+      }
+    }
+  } else {
+    availSec.classList.add('result-hidden');
+  }
+
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─── Wire up ──────────────────────────────────────────────────────────────────
+
+document.getElementById('add-subnet-btn').addEventListener('click', () => addSubnetRow());
+document.getElementById('check-btn').addEventListener('click', check);
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  document.getElementById('parent-cidr').value = '';
+  document.getElementById('proposed-cidr').value = '';
+  document.getElementById('find-prefix').value = '';
+  document.getElementById('subnet-list').innerHTML = '';
+  subnetCount = 0;
+  ['parent-err','proposed-err','find-err'].forEach(id => document.getElementById(id).textContent = '');
+  ['parent-cidr','proposed-cidr','find-prefix'].forEach(id => {
+    document.getElementById(id).classList.remove('error','valid');
+  });
+  document.getElementById('result-card').classList.add('result-hidden');
+});
+
+// Enter key triggers check
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) check();
+});
+
+// Seed with a useful example
+(function seed() {
+  document.getElementById('parent-cidr').value = '10.0.0.0/16';
+  addSubnetRow('10.0.1.0/24');
+  addSubnetRow('10.0.2.0/24');
+  addSubnetRow('10.0.10.0/23');
+  document.getElementById('proposed-cidr').value = '10.0.3.0/24';
+  document.getElementById('find-prefix').value = '24';
+})();
+</script>
 </body>
 </html>
