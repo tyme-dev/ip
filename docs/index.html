@@ -396,7 +396,7 @@ function findAvailable(parent, existing, plen, limit = 20) {
 
   while (cursor <= parent.bcast && results.length < limit) {
     // align cursor to subnet boundary
-    const aligned = (Math.floor(cursor / size) * size) >>> 0;
+    const aligned = (Math.ceil(cursor / size) * size) >>> 0;
     const candidate = {
       network: aligned,
       bcast: (aligned + size - 1) >>> 0,
@@ -441,7 +441,7 @@ function addSubnetRow(value = '') {
 
 function removeRow(id) {
   const row = document.querySelector(`.subnet-row[data-id="${id}"]`);
-  if (row) row.remove();
+  if (row) { row.remove(); saveState(); }
 }
 
 function getSubnets() {
@@ -461,7 +461,13 @@ function setValid(inputId, errId, ok, msg = '') {
 
 // ─── Check ────────────────────────────────────────────────────────────────────
 
-function check() {
+function yield_() { return new Promise(r => setTimeout(r, 0)); }
+
+let _checking = false;
+
+async function check() {
+  if (_checking) return;
+
   const parentRaw   = document.getElementById('parent-cidr').value.trim();
   const proposedRaw = document.getElementById('proposed-cidr').value.trim();
   const findPfxRaw  = document.getElementById('find-prefix').value.trim();
@@ -472,7 +478,6 @@ function check() {
     setValid('parent-cidr', 'parent-err', false, 'Invalid CIDR (e.g. 10.0.0.0/8)');
     return;
   }
-  // Warn if address isn't canonical
   const canonicalParent = intToIp(parent.network) + '/' + parent.prefix;
   setValid('parent-cidr', 'parent-err', true);
 
@@ -508,61 +513,61 @@ function check() {
     setValid('find-prefix', 'find-err', true);
   }
 
-  // --- Run checks
-  const checks = [];
-  let overallOk = true;
+  // --- Run checks (yield first so the browser can paint/respond)
+  _checking = true;
+  const btn = document.getElementById('check-btn');
+  btn.disabled = true;
+  await yield_();
 
-  if (proposed) {
-    // Check 1: canonical form
-    const canonicalProposed = intToIp(proposed.network) + '/' + proposed.prefix;
-    const isCanonical = canonicalProposed === proposedRaw || canonicalProposed === proposed.cidr.replace(/\s/g, '');
-    checks.push({
-      type: 'info',
-      label: 'Network address',
-      mono: canonicalProposed,
-    });
+  try {
+    const checks = [];
+    let overallOk = true;
 
-    // Check 2: fits in parent
-    const fits = contains(parent, proposed);
-    if (!fits) overallOk = false;
-    checks.push({
-      type: fits ? 'pass' : 'fail',
-      label: fits
-        ? `Fits within parent network ${canonicalParent}`
-        : `Outside parent network ${canonicalParent}`,
-      mono: `${intToIp(proposed.network)} – ${intToIp(proposed.bcast)}`,
-    });
+    if (proposed) {
+      const canonicalProposed = intToIp(proposed.network) + '/' + proposed.prefix;
+      checks.push({ type: 'info', label: 'Network address', mono: canonicalProposed });
 
-    // Check 3: collision with each existing
-    const colliders = existing.filter(e => overlaps(e, proposed));
-    if (colliders.length > 0) overallOk = false;
-
-    if (colliders.length === 0) {
+      const fits = contains(parent, proposed);
+      if (!fits) overallOk = false;
       checks.push({
-        type: 'pass',
-        label: existing.length > 0
-          ? `No collision with ${existing.length} existing subnet${existing.length > 1 ? 's' : ''}`
-          : 'No existing subnets to conflict with',
-        mono: '',
+        type: fits ? 'pass' : 'fail',
+        label: fits
+          ? `Fits within parent network ${canonicalParent}`
+          : `Outside parent network ${canonicalParent}`,
+        mono: `${intToIp(proposed.network)} – ${intToIp(proposed.bcast)}`,
       });
-    } else {
-      for (const c of colliders) {
-        const cCanon = intToIp(c.network) + '/' + c.prefix;
-        checks.push({ type: 'fail', label: `Overlaps with ${cCanon}`, mono: `${intToIp(c.network)} – ${intToIp(c.bcast)}` });
+
+      const colliders = existing.filter(e => overlaps(e, proposed));
+      if (colliders.length > 0) overallOk = false;
+
+      if (colliders.length === 0) {
+        checks.push({
+          type: 'pass',
+          label: existing.length > 0
+            ? `No collision with ${existing.length} existing subnet${existing.length > 1 ? 's' : ''}`
+            : 'No existing subnets to conflict with',
+          mono: '',
+        });
+      } else {
+        for (const c of colliders) {
+          const cCanon = intToIp(c.network) + '/' + c.prefix;
+          checks.push({ type: 'fail', label: `Overlaps with ${cCanon}`, mono: `${intToIp(c.network)} – ${intToIp(c.bcast)}` });
+        }
       }
+
+      const hostBits = 32 - proposed.prefix;
+      const hosts = hostBits > 1 ? (Math.pow(2, hostBits) - 2) : (hostBits === 1 ? 0 : 1);
+      checks.push({ type: 'info', label: `Subnet size: /${proposed.prefix} → ${hosts.toLocaleString()} usable host${hosts !== 1 ? 's' : ''}`, mono: '' });
+
+      showResult(overallOk, checks, parent, existing, proposed, findPfx);
+    } else if (findPfx !== null) {
+      showResult(null, [], parent, existing, null, findPfx);
+    } else {
+      setValid('proposed-cidr', 'proposed-err', false, 'Enter a subnet CIDR to check, or a prefix length to find available subnets');
     }
-
-    // Check 4: prefix size
-    const hostBits = 32 - proposed.prefix;
-    const hosts = hostBits > 1 ? (Math.pow(2, hostBits) - 2) : (hostBits === 1 ? 0 : 1);
-    checks.push({ type: 'info', label: `Subnet size: /${proposed.prefix} → ${hosts.toLocaleString()} usable host${hosts !== 1 ? 's' : ''}`, mono: '' });
-
-    showResult(overallOk, checks, parent, existing, proposed, findPfx);
-  } else if (findPfx !== null) {
-    // Just find available
-    showResult(null, [], parent, existing, null, findPfx);
-  } else {
-    setValid('proposed-cidr', 'proposed-err', false, 'Enter a subnet CIDR to check, or a prefix length to find available subnets');
+  } finally {
+    _checking = false;
+    btn.disabled = false;
   }
 }
 
@@ -681,10 +686,51 @@ function showResult(ok, checks, parent, existing, proposed, findPfx) {
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// ─── LocalStorage ─────────────────────────────────────────────────────────────
+
+const LS_KEY = 'subnet-checker-state';
+
+let _saveTimer = null;
+function saveState() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_doSave, 400);
+}
+function _doSave() {
+  const state = {
+    parent: document.getElementById('parent-cidr').value,
+    proposed: document.getElementById('proposed-cidr').value,
+    findPrefix: document.getElementById('find-prefix').value,
+    subnets: getSubnets(),
+  };
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const state = JSON.parse(raw);
+    document.getElementById('parent-cidr').value = state.parent || '';
+    document.getElementById('proposed-cidr').value = state.proposed || '';
+    document.getElementById('find-prefix').value = state.findPrefix || '';
+    (state.subnets || []).forEach(s => addSubnetRow(s));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Wire up ──────────────────────────────────────────────────────────────────
 
-document.getElementById('add-subnet-btn').addEventListener('click', () => addSubnetRow());
+document.getElementById('add-subnet-btn').addEventListener('click', () => { addSubnetRow(); saveState(); });
 document.getElementById('check-btn').addEventListener('click', check);
+
+['parent-cidr', 'proposed-cidr', 'find-prefix'].forEach(id => {
+  document.getElementById(id).addEventListener('input', saveState);
+});
+
+// Save when subnet inputs change (delegated, catches dynamically added rows)
+document.getElementById('subnet-list').addEventListener('input', saveState);
 
 document.getElementById('reset-btn').addEventListener('click', () => {
   document.getElementById('parent-cidr').value = '';
@@ -697,6 +743,7 @@ document.getElementById('reset-btn').addEventListener('click', () => {
     document.getElementById(id).classList.remove('error','valid');
   });
   document.getElementById('result-card').classList.add('result-hidden');
+  localStorage.removeItem(LS_KEY);
 });
 
 // Enter key triggers check
@@ -704,14 +751,17 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) check();
 });
 
-// Seed with a useful example
-(function seed() {
-  document.getElementById('parent-cidr').value = '10.0.0.0/16';
-  addSubnetRow('10.0.1.0/24');
-  addSubnetRow('10.0.2.0/24');
-  addSubnetRow('10.0.10.0/23');
-  document.getElementById('proposed-cidr').value = '10.0.3.0/24';
-  document.getElementById('find-prefix').value = '24';
+// Load saved state or fall back to example
+(function init() {
+  const restored = loadState();
+  if (!restored) {
+    document.getElementById('parent-cidr').value = '10.0.0.0/16';
+    addSubnetRow('10.0.1.0/24');
+    addSubnetRow('10.0.2.0/24');
+    addSubnetRow('10.0.10.0/23');
+    document.getElementById('proposed-cidr').value = '10.0.3.0/24';
+    document.getElementById('find-prefix').value = '24';
+  }
 })();
 </script>
 </body>
